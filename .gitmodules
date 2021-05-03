@@ -1,0 +1,7 @@
+[submodule "deintrerfaces"]
+	path = deintrerfaces
+	url = https://github.com/tonlabs/DeBot-IS-consortium
+[submodule "tonswapSC"]
+	path = tonswapSC
+	url = https://github.com/SVOIcom/secret-swap
+	branch = swap-pair-lp-tip3
