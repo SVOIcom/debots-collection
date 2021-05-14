@@ -11,7 +11,6 @@ import "../../deinterfaces/Terminal/Terminal.sol";
 import "../../deinterfaces/NumberInput/NumberInput.sol";
 import "../../tonswapSC/contracts/SwapPair/helpers/TIP3TokenDeployer.sol";
 import "../../tonswapSC/ton-eth-bridge-token-contracts/free-ton/contracts/interfaces/IRootTokenContract.sol";
-import "./testB.sol";
 
 abstract contract Debot {
 
@@ -25,7 +24,7 @@ abstract contract Debot {
 
 contract DebotA is Debot {
     uint owner;
-    address tip3Deployer = address.makeAddrStd(0, 0x93e0095bd06b6240abbfdd5d63e4d7ec0796b49549144d6bf65ab9c8a1f8e816);
+    address tip3Deployer = address.makeAddrStd(0, 0xcd326f453ae7d6e857319efd3f655ff17aa98dab5558124088009f6c9f8bbb42);
     uint8 constant MULTISIG_WALLET = 0;
     uint8 constant SURF_WALLET = 1;
 
@@ -49,8 +48,9 @@ contract DebotA is Debot {
         owner = msg.pubkey();
     }
 
-    function setTIP3DeployerAddress(address newTip3Deployer) public {
+    function setTIP3DeployerAddress(address newTip3Deployer) external {
         require(msg.pubkey() == owner, 100);
+        tvm.accept();
         tip3Deployer = newTip3Deployer;
     }
 
@@ -74,7 +74,7 @@ contract DebotA is Debot {
         publisher = "SVOIdev";
         caption = "Create your TIP3";
         author = "Paul Mikhaylov";
-        support = address.makeAddrStd(0, 0xdb6559e7b18c1e55409ff6d5962470f7df15f52a88d8c8fd24bc1f016304ed37);
+        support = address.makeAddrStd(0, 0xce6769edeb0300d6478fb01a49eb5794396a007bab6d35be8bb9769efaf77639);
         hello = "Test";
         language = "en";
         dabi = m_debotAbi.get();
@@ -198,28 +198,35 @@ contract DebotA is Debot {
         }
     }
 
-    function deployTIP3RootContract() public {
+    function deployTIP3RootContract() view public {
         optional(uint256) none;
-        B(tip3Deployer).test{
+        TIP3TokenDeployer(tip3Deployer).getFutureTIP3Address{
             abiVer: 2,
             extMsg: true,
             sign: false,
             pubkey: none,
-            time: uint64(now),
+            time: 0,
             expire: 0,
-            callbackId: tvm.functionId(getRootTIP3Address),
+            callbackId: tvm.functionId(testAddress),
             onErrorId: 0
         }(
-            tip3name, tip3symbol
+            tip3name, tip3symbol, decimals, userPubkey
         );
     }
 
-    function getRootTIP3Address(bytes tip3Address) public {
+    function testAddress(address value0) public {
+        Terminal.print(0, format("Future address: {}", value0));
+        Terminal.print(0, "Returning to main menu");
+        actionMenu();
+    }
+
+    function getRootTIP3Address(address tip3Address) public {
         Terminal.print(0, format("Future tip3 address: {}", tip3Address));
+        Terminal.print(tvm.functionId(actionMenu), "Returning to main menu");
     }
     
     function initializeTIP3WalletDeploy(uint32 index) public {
-
+        actionMenu();
     }
 
     function redirectToControlMethodMenu(uint32 index) public {
