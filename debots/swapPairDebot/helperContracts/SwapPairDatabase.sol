@@ -21,7 +21,7 @@ contract SwapPairDatabase {
         rootAddress = rootSwapPairAddress;
     }
 
-    function requestSwapPairsList() public {
+    function requestSwapPairsList() public view {
         optional(uint256) pubkey;
         IRootSwapPair(rootAddress).getAllSwapPairsID{
             abiVer: 2,
@@ -40,7 +40,7 @@ contract SwapPairDatabase {
         getSwapPairsInfo();
     }
 
-    function getSwapPairsInfo() public {
+    function getSwapPairsInfo() public view {
         optional(uint256) pubkey;
         for (uint256 id: swapPairsID) {
             IRootSwapPair(rootAddress).getPairInfoByID{

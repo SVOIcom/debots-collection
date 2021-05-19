@@ -24,15 +24,29 @@ import "./lib/Constants.sol";
 // [x]: Получение информации о TIP-3
 // [ ]: Взаимодействие TIP-3 с контрактами 
 
-contract TonSwapTIP3Debot is Debot, TIP3WalletsDatabase, SwapPairDatabase, StringContract {
+// Function ids: A**
+
+contract TonSwapTIP3Debot is Debot, TIP3WalletsDatabase, StringContract, Upgradable {
     enum CURRENT_OPERATION { SWAP, PROVIDE_LP, PROVIDE_LP_ONE, WITHDRAW_LP, WITHDRAW_LP_ONE }
     address constant addressZero = address.makeAddrStd(0, 0);
+    uint128 constant maxUint128 = 340282366920938463463374607431768211455;
 
     CURRENT_OPERATION currentOperation;
     address tmpTIP3WalletAddress;
     ITONTokenWalletDetails tmpWalletInfoStorage;
     IRootTokenContractDetails tmpRootInfoStorage;
     TIP3WalletInfo tmpDBRecord;
+    address swapPairAddress;
+    uint32 tokenIndex;
+    uint8 rootCounter;
+    uint128 amount1; uint128 amount2;
+    optional(uint256) pubkey_;
+    ManageType tmpManageType;
+    TvmCell payload;
+
+    bytes symbol1; bytes symbol2;
+
+    SwapPairInfo spi;
 
     //========================================
     //
@@ -43,14 +57,14 @@ contract TonSwapTIP3Debot is Debot, TIP3WalletsDatabase, SwapPairDatabase, Strin
     
 	//========================================
     //
-	function getRequiredInterfaces() public override pure returns (uint256[] interfaces) 
+	function getRequiredInterfaces() public pure returns (uint256[] interfaces) 
     {
         return [Terminal.ID, AddressInput.ID, ConfirmInput.ID, AmountInput.ID, Menu.ID];
 	}
 
     //========================================
     //
-    function getDebotInfo() public override functionID(0xDEB) view returns(
+    function getDebotInfo() public functionID(0xDEB) view returns(
         string name,     string version, string publisher, string key,  string author,
         address support, string hello,   string language,  string dabi, bytes icon
     ) {
@@ -86,9 +100,7 @@ contract TonSwapTIP3Debot is Debot, TIP3WalletsDatabase, SwapPairDatabase, Strin
     /// @notice Entry point function for DeBot.    
     function start() public override {
         delete tip3Wallets;
-        delete swapPairs;
         cleanUpTmpVars();
-        requestSwapPairsList();
         mainMenu(0);
     }
 
@@ -96,172 +108,231 @@ contract TonSwapTIP3Debot is Debot, TIP3WalletsDatabase, SwapPairDatabase, Strin
         index = 0;
 
         MenuItem[] mi;
-        mi.push(MenuItem("", "", tvm.functionId(tonswapEntryPoint)));
-        mi.push(MenuItem("", "", tvm.functionId(tip3ManageEntryPoint)));
-        mi.push(MenuItem("", "", tvm.functionId(extraInfoEntryPoint)));
-        mi.push(MenuItem("", "", tvm.functionId(explorerEntryPoint)));
-        Menu.select("", "", mi);
+        mi.push(MenuItem(vals[10], vals[11], 0xA0));
+        mi.push(MenuItem(vals[12], vals[13], 0xA1));
+        mi.push(MenuItem(vals[14], vals[15], 0xA2));
+        Menu.select(vals[18], vals[19], mi);
     }
 
     //========================================
     /// @notice TonSwap functionality goes here
-    function tonswapEntryPoint(uint32 index) public {
-        index = 0;
-
-        chooseSwapPair(tvm.functionId(chooseSwapPairAction));
+    function tonswapEntryPoint(uint32 index) functionID(0xA0) public {
+        // chooseSwapPair(0xB0);
+        // chooseSwapPairAction(0);
+        AddressInput.get(0xB0, vals[20]);
     }
 
-    function chooseSwapPairAction(uint32 index) public {
-        Terminal.print(0, format("Swap pair: {}", swapPairs[swapPairsNumberToAddress[index-1]].swapPairLPTokenName));
+    function getSwapPairAddress(address value) functionID(0xB0) public {
+        swapPairAddress = value;
+        optional(uint256) pubkey;
+        SwapPair(swapPairAddress).getPairInfo{
+            abiVer: 2,
+            extMsg: true,
+            sign: false,
+            callbackId: 0xB1,
+            onErrorId: 0,
+            time: uint64(now),
+            expire: 0,
+            pubkey: pubkey
+        }(0);
+    }
+
+    function receiveSwapPairInfo(SwapPairInfo spi_) functionID(0xB1) public {
+        spi = spi_;
+        rootCounter = 0;
+        getTIP3RootDetails(spi.tokenRoot1, 0xB2);
+        getTIP3RootDetails(spi.tokenRoot1, 0xB3);
+    }
+
+    function receiveFirstTIP3Info(IRootTokenContractDetails rootInfo) functionID(0xB2) public {
+        symbol1 = rootInfo.symbol;
+        rootCounter++;
+        if (rootCounter == 2)
+            chooseSwapPairAction();
+    }
+
+    function receiveSecondTIP3Info(IRootTokenContractDetails rootInfo) functionID(0xB3) public {
+        symbol2 = rootInfo.symbol;
+        rootCounter++;
+        if (rootCounter == 2)
+            chooseSwapPairAction();
+    }
+
+    function chooseSwapPairAction()  public {
+        Terminal.print(0, format("Swap pair: {}", spi.swapPairLPTokenName));
         MenuItem[] mi;
-        mi.push(MenuItem("", "", tvm.functionId(swapTokensEntyPoint)));
-        mi.push(MenuItem("", "", tvm.functionId(provideLiquidityEntryPoint)));
-        mi.push(MenuItem("", "", tvm.functionId(provideLiquidityOneTokenEntryPoint)));
-        mi.push(MenuItem("", "", tvm.functionId(withdrawLiquidityEntryPoint)));
-        mi.push(MenuItem("", "", tvm.functionId(withdrawLiquidityOneTokenEntryPoint)));
-        mi.push(MenuItem("", "", tvm.functionId(returnToMainMenu)));
 
-        Menu.select("", "", mi);
+        mi.push(MenuItem(vals[20], vals[21], 0xC0));
+        mi.push(MenuItem(vals[22], vals[23], 0xC0));
+        mi.push(MenuItem(vals[24], vals[25], tvm.functionId(provideLiquidityOneTokenEntryPoint)));
+        mi.push(MenuItem(vals[26], vals[27], tvm.functionId(withdrawLiquidityEntryPoint)));
+        mi.push(MenuItem(vals[28], vals[29], tvm.functionId(withdrawLiquidityOneTokenEntryPoint)));
+        mi.push(MenuItem(vals[30], vals[31], tvm.functionId(mainMenu)));
 
-        // mi.push(MenuItem(vals[20], vals[21], tvm.functionId(swapTokensEntyPoint)));
-        // mi.push(MenuItem(vals[22], vals[23], tvm.functionId(provideLiquidityEntryPoint)));
-        // mi.push(MenuItem(vals[24], vals[25], tvm.functionId(provideLiquidityOneTokenEntryPoint)));
-        // mi.push(MenuItem(vals[26], vals[27], tvm.functionId(withdrawLiquidityEntryPoint)));
-        // mi.push(MenuItem(vals[28], vals[29], tvm.functionId(withdrawLiquidityOneTokenEntryPoint)));
-        // mi.push(MenuItem(vals[30], vals[31], tvm.functionId(returnToMainMenu)));
-
-        // Menu.select(vals[32], vals[33], mi);
-
+        Menu.select(vals[32], vals[33], mi);
     }
 
-    function swapTokensEntyPoint(uint32 index) public {
-        index = 0;
+    function swapTokensEntyPoint(uint32 index) functionID(0xC0) public {
         MenuItem[] mi;
         mi.push(MenuItem(
-            format("Token-{}", index+1), 
-            format("Address: {}:{}", index, index), 
-            tvm.functionId(getWalletForSwap))
+            symbol1,
+            "", 
+            0xC1)
         );
         mi.push(MenuItem(
-            format("Token-{}", index+1), 
-            format("Address: {}:{}", index, index), 
-            tvm.functionId(getWalletForSwap))
+            symbol2,
+            "", 
+            0xC1)
         );
-        Menu.select("Choose your wallet:", "", mi);
+        Menu.select(vals[36], "", mi);
     }
 
-    function getWalletForSwap(uint32 index) public {
-        AmountInput.get(tvm.functionId(performSwapOperation),  "Input token amount for swap:", 9, 0, 10);
+    function getWalletForSwap(uint32 index) functionID(0xC1) public {
+        tokenIndex = index;
+        AmountInput.get(
+            0xC2, 
+            vals[37], 
+            0,
+            0, 
+            maxUint128
+        );
     }
 
-    function performSwapOperation(uint128 value) public {
-        Terminal.print(tvm.functionId(returnToSwapMenu), "Great! Swap completed");
+    function getAmountForSwap(uint128 value) functionID(0xC2) public {
+        amount1 = value;
+        SwapPair(spi.swapPairAddress).createSwapPayload{
+            abiVer: 2,
+            extMsg: true,
+            sign: false,
+            callbackId: 0xC3,
+            onErrorId: 0,
+            time: uint64(now),
+            expire: 0,
+            pubkey: pubkey_
+        }(tip3Wallets[tokenIndex == 1? spi.tokenRoot1:spi.tokenRoot2].wallet_address);
     }
 
-    function provideLiquidityEntryPoint(uint32 index) public {
-        AmountInput.get(tvm.functionId(getFirstTokenAmount),  format(" ${} token:", index+1), 9, 0, 10);
-        AmountInput.get(tvm.functionId(getSecondTokenAmount),  format(" ${} token:", index+2), 9, 0, 10);
-        Terminal.print(tvm.functionId(performLiquidityProvidingOperation), " operation");
+    function getSwapPayload(TvmCell receivedPayload) functionID(0xC3) public {
+        payload = receivedPayload;
+        performSwapOperation();
     }
 
-    function performLiquidityProvidingOperation() public {
-        Terminal.print(tvm.functionId(returnToSwapMenu), "");
+    function performSwapOperation() public {
+        if (tip3Wallets[tokenIndex == 1? spi.tokenRoot1:spi.tokenRoot2].manageType == ManageType.MANAGE_WITH_KEYPAIR) {
+            sendMessageViaKeys(
+                tip3Wallets[tokenIndex == 1? spi.tokenRoot1:spi.tokenRoot2].wallet_address,
+                tokenIndex == 1? spi.tokenWallet1 : spi.tokenWallet2,
+                amount1,
+                payload
+            );
+        } else {
+
+        }
+        Terminal.print(0xE2, vals[38]);
+    }
+
+    function provideLiquidityEntryPoint(uint32 index) functionID(0xC0) public {
+        Terminal.print(0, vals[40]);
+        AmountInput.get(0xE0, vals[41], 9, 0, maxUint128);
+        AmountInput.get(0xE1, vals[42], 9, 0, maxUint128);
+        Terminal.print(0xC1, vals[43]);
+    }
+
+    function performLiquidityProvidingOperation() functionID(0xC1) public {
+        Terminal.print(0xE2, vals[44]);
     }
 
     function provideLiquidityOneTokenEntryPoint(uint32 index) public {
-        AmountInput.get(tvm.functionId(getFirstTokenAmount),  format(" ${} token:", index+1), 9, 0, 10);
-        Terminal.print(tvm.functionId(performLiquidityProvidingOneTokenOperation), " operation");
+        AmountInput.get(0xE0,  format("${}", index+1), 9, 0, maxUint128);
+        Terminal.print(tvm.functionId(performLiquidityProvidingOneTokenOperation), " ");
     }
 
     function performLiquidityProvidingOneTokenOperation() public {
-        Terminal.print(tvm.functionId(returnToSwapMenu), " completed");
+        Terminal.print(0xE2, " ");
     }
 
     function withdrawLiquidityEntryPoint(uint32 index) public {
-        AmountInput.get(tvm.functionId(getFirstTokenAmount),  format(" ${} token:", index+1), 9, 0, 10);
-        Terminal.print(tvm.functionId(performLiquidityWithdrawingOperation), " operation");
+        AmountInput.get(0xE0,  format("{}", index+1), 9, 0, 10);
+        Terminal.print(tvm.functionId(performLiquidityWithdrawingOperation), " ");
     }
 
     function performLiquidityWithdrawingOperation() public {
-        Terminal.print(tvm.functionId(returnToSwapMenu), "");
+        Terminal.print(0xE2, "");
     }
 
     function withdrawLiquidityOneTokenEntryPoint(uint32 index) public {
-        AmountInput.get(tvm.functionId(getFirstTokenAmount),  format(" ${} token:", index+1), 9, 0, 10);
+        AmountInput.get(0xE0,  format("{}", index+1), 9, 0, 10);
         MenuItem[] mi;
         mi.push(MenuItem(
-            format(" {}", index+1), 
-            format(": {}:{}", index, index), 
+            format("{}", index+1), 
+            format("{}{}", index, index), 
             tvm.functionId(getWalletForLPWithdraw))
         );
         mi.push(MenuItem(
-            format("", index+1), 
-            format("", index, index), 
+            format("{}", index+1), 
+            format("{}{}", index, index), 
             tvm.functionId(getWalletForLPWithdraw))
         );
         Menu.select("", "", mi);
     }
 
     function getWalletForLPWithdraw(uint32 index) public {
-        Terminal.print(0, format("", index));
-        Terminal.print(0, "");
+        Terminal.print(0, format("{}", index));
         performLiquidityWithdrawingOneTokenOperation();
     }
 
     function performLiquidityWithdrawingOneTokenOperation() public {
-        Terminal.print(tvm.functionId(returnToSwapMenu), "");
+        Terminal.print(0xE2, "");
     }
 
-    function getFirstTokenAmount(uint128 value) public pure {
-        value = 0;
+    function getFirstTokenAmount(uint128 value) functionID(0xE0) public pure {
     }
 
-    function getSecondTokenAmount(uint128 value) public pure {
-        value = 0;
+    function getSecondTokenAmount(uint128 value) functionID(0xE1) public pure {
     }
 
-    function returnToSwapMenu() public {
-        Terminal.print(0, "");
+    function returnToSwapMenu() functionID(0xE2) public {
+        Terminal.print(0, "a");
         tonswapEntryPoint(0);
     }
 
-    function sendTokensViaMultisig(address sender, address destination, TvmCell payload) private pure {
+    function sendTokensViaMultisig(address sender, address destination, TvmCell payload_) private pure {
         optional(uint256) pubkey = 0;
         IMultisig(sender).sendTransaction{
             abiVer: 2,
             extMsg: true,
             sign: true,
             callbackId: 0,
-            onErrorId: tvm.functionId(onError),
+            onErrorId: 0xEEE,
             time: uint64(now),
             expire: 0,
             pubkey: pubkey
-        }(destination, Constants.SEND_WITH_MESSAGE, true, 1, payload);
+        }(destination, Constants.SEND_WITH_MESSAGE, true, 1, payload_);
     }
 
-    function sendMessageViaKeys(address sender, address destination, uint8 tokenAmount, TvmCell payload) private pure {
+    function sendMessageViaKeys(address sender, address destination, uint128 tokenAmount, TvmCell payload_) private pure {
         optional(uint256) pubkey = 0;
         ITIP3Token(sender).transfer{
             abiVer: 2,
             extMsg: true,
             sign: true,
             callbackId: 0,
-            onErrorId: tvm.functionId(onError),
+            onErrorId: 0xEEE,
             time: uint64(now),
             expire: 0,
             pubkey: pubkey
-        }(destination, tokenAmount, Constants.SEND_WITH_MESSAGE, addressZero, true, payload);
+        }(destination, tokenAmount, Constants.SEND_WITH_MESSAGE, addressZero, true, payload_);
     }
 
     //========================================
     /// @notice TIP3 manage functionality goes here
-    function tip3ManageEntryPoint(uint32 index) public {
+    function tip3ManageEntryPoint(uint32 index) functionID(0xA1) public {
         index = 0;
 
         MenuItem[] mi;
         mi.push(MenuItem("", "", tvm.functionId(addTIP3WalletEntryPoint)));
         mi.push(MenuItem("", "", tvm.functionId(showTIP3WalletsEntryPoint)));
-        mi.push(MenuItem("", "", tvm.functionId(returnToMainMenu)));
+        mi.push(MenuItem("", "", tvm.functionId(mainMenu)));
         Menu.select("", "", mi);
     }
 
@@ -279,7 +350,7 @@ contract TonSwapTIP3Debot is Debot, TIP3WalletsDatabase, SwapPairDatabase, Strin
 
     function receiveTIP3WalletInfo(ITONTokenWalletDetails walletInfo) public {
         tmpWalletInfoStorage = walletInfo;
-        Terminal.print(0, "Fetching information about your TIP-3 wallet's root contract");
+        Terminal.print(0, " contract");
         getTIP3RootDetails(walletInfo.root_address, tvm.functionId(receiveTIP3RootInfo));
     }
 
@@ -313,7 +384,6 @@ contract TonSwapTIP3Debot is Debot, TIP3WalletsDatabase, SwapPairDatabase, Strin
     }
 
     function showTIP3WalletsEntryPoint(uint32 index) public {
-        index = 0;
         showTIP3Wallets();
     }
 
@@ -326,7 +396,7 @@ contract TonSwapTIP3Debot is Debot, TIP3WalletsDatabase, SwapPairDatabase, Strin
     }
 
     function returnToTIP3ManageEntryPoint() public {
-        Terminal.print(0, "Returning to TIP3 manage menu");
+        Terminal.print(0, " menu");
         tip3ManageEntryPoint(0);
     }
 
@@ -337,7 +407,7 @@ contract TonSwapTIP3Debot is Debot, TIP3WalletsDatabase, SwapPairDatabase, Strin
             extMsg: true,
             sign: false,
             callbackId: callbackFunctionId,
-            onErrorId: tvm.functionId(onError),
+            onErrorId: 0xEEE,
             time: uint64(now),
             expire: 0,
             pubkey: pubkey
@@ -351,7 +421,7 @@ contract TonSwapTIP3Debot is Debot, TIP3WalletsDatabase, SwapPairDatabase, Strin
             extMsg: true,
             sign: false,
             callbackId: callbackFunctionId,
-            onErrorId: tvm.functionId(onError),
+            onErrorId: 0xEEE,
             time: uint64(now),
             expire: 0,
             pubkey: pubkey
@@ -361,12 +431,12 @@ contract TonSwapTIP3Debot is Debot, TIP3WalletsDatabase, SwapPairDatabase, Strin
     function buildWalletInfo(TIP3WalletInfo walletInfo) private pure returns(string) {
         string tmpString;
         tmpString.append(format("{} token wallet\n", walletInfo.symbol));
-        tmpString.append(format("Token balance: {}\n", walletInfo.balance));
-        tmpString.append(format("Wallet address: {}\n", walletInfo.wallet_address));
+        tmpString.append(format("Balance: {}\n", walletInfo.balance));
+        tmpString.append(format("Wallet Address: {}\n", walletInfo.wallet_address));
         if (walletInfo.manageType == ManageType.MANAGE_WITH_KEYPAIR) {
-            tmpString.append(format("Managed with pubkey {}\n", walletInfo.wallet_public_key));
+            tmpString.append(format("Pubkey: {}\n", walletInfo.wallet_public_key));
         } else {
-            tmpString.append(format("Managed with multisig {}\n", walletInfo.owner_address));
+            tmpString.append(format("Multisig: {}\n", walletInfo.owner_address));
         }
         return tmpString;
     }
@@ -380,50 +450,23 @@ contract TonSwapTIP3Debot is Debot, TIP3WalletsDatabase, SwapPairDatabase, Strin
 
     //========================================
     /// @notice Extra information functionality goes here
-    function extraInfoEntryPoint(uint32 index) public {
-        index = 0;
+    function extraInfoEntryPoint(uint32 index) functionID(0xA2) public {
 
         printExtraInfoAndReturn();
     }
 
     function printExtraInfoAndReturn() public {
         Terminal.print(0, "SVOI.dev are the best");
-        returnToMainMenu(0);
+        mainMenu(0);
     }
 
-    function returnToMainMenu(uint32 index) public {
-        index = 0;
+    function returnToMainMenu() public {
         mainMenu(0);
     }
 
     //========================================
-    /// @notice Explorer functionality goes here
-    function explorerEntryPoint(uint32 index) public {
-        index = 0;
-        explorerFunction();
-    }
-
-    function chooseSwapPair(uint32 functionId) public {
-        MenuItem[] mi;
-        delete swapPairsNumberToAddress;
-        uint32 i = 0;
-        for ((address swapPairAddress, SwapPairInfo spi) : swapPairs) {
-            mi.push(MenuItem(spi.swapPairLPTokenName, "", functionId));
-            swapPairsNumberToAddress[i] = spi.swapPairAddress;
-        }
-
-        mi.push(MenuItem("Return to main menu", "", tvm.functionId(returnToMainMenu)));
-        Menu.select("Choose swap pair: ", "", mi);
-    }
-
-    function explorerFunction() public {
-        //Terminal.print(0, "Explorer goes here.");
-        returnToMainMenu(0);
-    }
-
-    //========================================
     /// @notice Error functionality goes here
-    function onError(uint32 sdkError, uint32 exitCode) public {
+    function onError(uint32 sdkError, uint32 exitCode) functionID(0xEEE) public {
         Terminal.print(0, format("SdkError: {}, exitCode: {}", sdkError, exitCode));
         mainMenu(0);
     }

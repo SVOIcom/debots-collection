@@ -15,6 +15,7 @@ abstract contract TIP3WalletsDatabase {
         address owner_address;
         uint128 balance;
         bytes symbol;
+        uint8 decimals;
         ManageType manageType;
     }
 
@@ -55,6 +56,7 @@ abstract contract TIP3WalletsDatabase {
             receivedTIP3WalletInfo.owner_address,
             receivedTIP3WalletInfo.balance,
             receivedTIP3RootInfo.symbol,
+            receivedTIP3RootInfo.decimals,
             receivedTIP3WalletInfo.owner_address.value == 0 ? ManageType.MANAGE_WITH_KEYPAIR : ManageType.MANAGE_WITH_MULTISIG
         );
     }
