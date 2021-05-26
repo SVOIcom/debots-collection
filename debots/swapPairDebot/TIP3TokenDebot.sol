@@ -125,7 +125,7 @@ contract TonSwapTIP3Debot is Debot, TIP3WalletsDatabase, StringContract, Upgrada
     function getSwapPairAddress(address value) functionID(0xB0) public {
         swapPairAddress = value;
         optional(uint256) pubkey;
-        SwapPair(swapPairAddress).getPairInfo{
+        ISwapPair(swapPairAddress).getPairInfo{
             abiVer: 2,
             extMsg: true,
             sign: false,
@@ -200,7 +200,7 @@ contract TonSwapTIP3Debot is Debot, TIP3WalletsDatabase, StringContract, Upgrada
 
     function getAmountForSwap(uint128 value) functionID(0xC2) public {
         amount1 = value;
-        SwapPair(spi.swapPairAddress).createSwapPayload{
+        ISwapPair(spi.swapPairAddress).createSwapPayload{
             abiVer: 2,
             extMsg: true,
             sign: false,
@@ -396,7 +396,6 @@ contract TonSwapTIP3Debot is Debot, TIP3WalletsDatabase, StringContract, Upgrada
     }
 
     function returnToTIP3ManageEntryPoint() public {
-        Terminal.print(0, " menu");
         tip3ManageEntryPoint(0);
     }
 
@@ -445,7 +444,7 @@ contract TonSwapTIP3Debot is Debot, TIP3WalletsDatabase, StringContract, Upgrada
         delete tmpTIP3WalletAddress;
         delete tmpWalletInfoStorage;
         delete tmpRootInfoStorage;
-        delete tmpDBRecord;
+        delete tmpDBRecord;  
     }
 
     //========================================
@@ -456,7 +455,10 @@ contract TonSwapTIP3Debot is Debot, TIP3WalletsDatabase, StringContract, Upgrada
     }
 
     function printExtraInfoAndReturn() public {
-        Terminal.print(0, "SVOI.dev are the best");
+        Terminal.print(0, "SVOI.dev team are developing products for Free TON.");
+        Terminal.print(0, "TONSwap - liquidity pool based exchange https://tonswap.com");
+        Terminal.print(0, "TONWallet - browser extention for wallets management https://https://tonwallet.io/");
+        Terminal.print(0, "Our telegram channel: https://t.me/tonswap");
         mainMenu(0);
     }
 

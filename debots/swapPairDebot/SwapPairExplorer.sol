@@ -23,6 +23,7 @@ contract SwapPairExplorer is Debot, Upgradable, SwapPairDatabase {
     bytes symbol1; bytes symbol2;
     uint8 decimals1; uint8 decimals2;
     address firstTIP3Address; address secondTIP3Address;
+    SwapPairInfo spi;
     TvmCell payload;
 
     //========================================
@@ -238,7 +239,7 @@ contract SwapPairExplorer is Debot, Upgradable, SwapPairDatabase {
     function aboutInfoEntryPoint(uint32 index) public {
         Terminal.print(0, "SVOI.dev team are developing products for Free TON.");
         Terminal.print(0, "TONSwap - liquidity pool based exchange https://tonswap.com");
-        Terminal.print(0, "TONWallet - browser extention for wallets management https://https://tonwallet.io/");
+        Terminal.print(0, "TONWallet - browser extention for wallets management https://tonwallet.io/");
         Terminal.print(0, "Our telegram channel: https://t.me/tonswap");
         mainMenu(0);
     }
