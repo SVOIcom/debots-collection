@@ -102,7 +102,7 @@ contract SwapPairExplorer is Debot, Upgradable, TIP3WalletsDatabase {
     function mainMenu(uint32 index) public {
         MenuItem[] mi;
         mi.push(MenuItem("Swap tokens", "", tvm.functionId(swapEntryPoint)));
-        mi.push(MenuItem("Add token wallets", "Add token wakket for iteration with swap pair", tvm.functionId(addWalletEntryPoint)));
+        mi.push(MenuItem("Add token wallets", "Add token wallets for iteration with swap pair or get it's status", tvm.functionId(addWalletEntryPoint)));
         mi.push(MenuItem("About SVOI dev", "Information about SVOI dev", tvm.functionId(aboutInfoEntryPoint)));
         Menu.select("Choose action", "", mi);
     }
@@ -152,7 +152,7 @@ contract SwapPairExplorer is Debot, Upgradable, TIP3WalletsDatabase {
     function swapContinuePoint() public {
         if (!tip3Wallets.exists(spi.tokenRoot1)) {
             printAndAddToken(symbol1);
-        } else if (!tip3Wallets.exists(spi.tokenRoot1)) {
+        } else if (!tip3Wallets.exists(spi.tokenRoot2)) {
             printAndAddToken(symbol2);
         } else {
             MenuItem[] mi;
@@ -170,7 +170,7 @@ contract SwapPairExplorer is Debot, Upgradable, TIP3WalletsDatabase {
             "Input token amount for swap", 
             index == 0 ? decimals1 : decimals2, 
             1, 
-            maxUint128 / (index == 0 ? decimals1 : decimals2)
+            maxUint128 / 10**uint128(index == 0 ? decimals1 : decimals2)
         );
     }
 
@@ -202,7 +202,8 @@ contract SwapPairExplorer is Debot, Upgradable, TIP3WalletsDatabase {
                 expire: 0,
                 pubkey: pubkey
             }(
-                tip3Wallets[tmpRootAddress].wallet_address, amountForSwap, 0.2 ton, address.makeAddrStd(0, 0), true, payload_
+                tmpRootAddress == spi.tokenRoot1 ? spi.tokenWallet1 : spi.tokenWallet2, 
+                amountForSwap, 0.2 ton, address.makeAddrStd(0, 0), true, payload_
             );
         } else {
             TvmCell payloadForTIP;
