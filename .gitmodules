@@ -5,3 +5,6 @@
 	path = tonswapSC
 	url = https://github.com/SVOIcom/secret-swap
 	branch = swap-pair-lp-tip3
+[submodule "dens-v2"]
+	path = dens-v2
+	url = https://github.com/laugual/dens-v2
