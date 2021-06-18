@@ -23,14 +23,11 @@ contract SwapPairExplorer is Debot, Upgradable, TIP3WalletsDatabase {
 
     uint128 constant maxUint128 = 340282366920938463463374607431768211455;
 
-    address tmpRootAddress;
     address tmpTIP3WalletAddress;
-    address anotherTmpRootAddress;
     ITONTokenWalletDetails tmpWalletInfoStorage;
-    uint128 amountForSwap;
+    uint128 lpTokenAmount;
     bytes symbol1; bytes symbol2;
     uint8 decimals1; uint8 decimals2;
-    address firstWalletAddress; address secondWalletAddress;
     TvmCell payload;
     address currentSwapPair;
 
@@ -56,7 +53,7 @@ contract SwapPairExplorer is Debot, Upgradable, TIP3WalletsDatabase {
         string name,     string version, string publisher, string key,  string author,
         address support, string hello,   string language,  string dabi, bytes icon
     ) {
-        name      = "TonSwap debot";
+        name      = "TonSwap Liquidity withdrawing debot";
         version   = "0.1.0";
         publisher = "SVOI.dev team";
         key       = "SVOI.dev team's TonSwap debot";
@@ -71,7 +68,7 @@ contract SwapPairExplorer is Debot, Upgradable, TIP3WalletsDatabase {
     //========================================
     /// @notice Define DeBot version and title here.
     function getVersion() public override returns (string name, uint24 semver) {
-        (name, semver) = ("TonSwap debot", _version(0, 1, 0));
+        (name, semver) = ("TonSwap Liquidity withdrawing debot", _version(0, 1, 0));
     }
 
     function _version(uint24 major, uint24 minor, uint24 fix) private pure inline returns (uint24) {
@@ -92,14 +89,14 @@ contract SwapPairExplorer is Debot, Upgradable, TIP3WalletsDatabase {
 
     function mainMenu(uint32 index) public {
         MenuItem[] mi;
-        mi.push(MenuItem("Swap tokens", "", tvm.functionId(swapEntryPoint)));
-        mi.push(MenuItem("Add token wallets", "Add token wallets for iteration with swap pair or get it's status", tvm.functionId(addWalletEntryPoint)));
+        mi.push(MenuItem("Withdraw liquidity", "", tvm.functionId(withdrawLiquidityEntryPoint)));
+        mi.push(MenuItem("Add token wallets", "Add token wallets for iteration with swap pair and get their status", tvm.functionId(addWalletEntryPoint)));
         mi.push(MenuItem("About SVOI dev", "Information about SVOI dev", tvm.functionId(aboutInfoEntryPoint)));
         Menu.select("Choose action", "", mi);
     }
 
     //========================================
-    function swapEntryPoint(uint32 index) public {
+    function withdrawLiquidityEntryPoint(uint32 index) public {
         AddressInput.get(tvm.functionId(receiveSwapPairAddress), "Input swap pair address:");
     }
 
@@ -123,11 +120,6 @@ contract SwapPairExplorer is Debot, Upgradable, TIP3WalletsDatabase {
         getTIP3RootDetails(spi.tokenRoot1, tvm.functionId(receiveFirstTIP3Info));
     }
 
-    function printAndAddToken(bytes symbol) private {
-        Terminal.print(0, format("Wallet for {} does not exists. Please add it", symbol));
-        addTIP3WalletEntryPoint(0);
-    }
-
     function receiveFirstTIP3Info(IRootTokenContractDetails tri) public {
         symbol1 = tri.symbol;
         decimals1 = tri.decimals;
@@ -137,53 +129,64 @@ contract SwapPairExplorer is Debot, Upgradable, TIP3WalletsDatabase {
     function receiveSecondTIP3Info(IRootTokenContractDetails tri) public {
         symbol2 = tri.symbol;
         decimals2 = tri.decimals;
-        swapContinuePoint();
+        provideLiquidityContinuePoint();
     }
 
-    function swapContinuePoint() public {
+    function provideLiquidityContinuePoint() public {
         if (!tip3Wallets.exists(spi.tokenRoot1)) {
             printAndAddToken(symbol1);
-        } else if (!tip3Wallets.exists(spi.tokenRoot2)) {
+        } else if (!tip3Wallets.exists(spi.tokenRoot1)) {
             printAndAddToken(symbol2);
+        } else if (!tip3Wallets.exists(spi.lpTokenRoot)) {
+            Terminal.print(0, format("Add wallet for {} LP token please", spi.swapPairLPTokenName));
+            addTIP3WalletEntryPoint(0);
         } else {
-            MenuItem[] mi;
-            mi.push(MenuItem(format("{}", symbol1), "", tvm.functionId(getTokenIndex)));
-            mi.push(MenuItem(format("{}", symbol2), "", tvm.functionId(getTokenIndex)));
-            Menu.select("Choose token:", "", mi);
+            getAmountForLPToken();
         }
     }
 
-    function getTokenIndex(uint32 index) public {
-        tmpRootAddress = index == 0 ? spi.tokenRoot1 : spi.tokenRoot2;
-        anotherTmpRootAddress = index == 0 ? spi.tokenRoot2 : spi.tokenRoot1;
+    function getAmountForLPToken() public {
         AmountInput.get(
-            tvm.functionId(getTokenAmount), 
-            "Input token amount for swap", 
-            index == 0 ? decimals1 : decimals2, 
+            tvm.functionId(receiveLPTokenAmount), 
+            format("Input token amount of {} LP token to withdraw", spi.swapPairLPTokenName), 
+            0, 
             1, 
-            maxUint128 / 10**uint128(index == 0 ? decimals1 : decimals2)
+            maxUint128
         );
     }
 
-    function getTokenAmount(uint128 value) public {
-        amountForSwap = value;
-        optional(uint256) pubkey; 
-        ISwapPair(currentSwapPair).createSwapPayload{
+    function receiveLPTokenAmount(uint128 value) public {
+        lpTokenAmount = value;
+        getPayloadForLiquidityProviding();
+    }
+
+    function getPayloadForLiquidityProviding() public view {
+        optional(uint256) pubkey;
+        ISwapPair(currentSwapPair).createWithdrawLiquidityPayload{
             abiVer: 2,
             extMsg: true,
             sign: false,
-            callbackId: tvm.functionId(getPayloadForSwap),
+            callbackId: tvm.functionId(receivePayloadForLPWithdrawing),
             onErrorId: tvm.functionId(onError),
             time: uint64(now),
             expire: 0,
             pubkey: pubkey
-        }(tip3Wallets[anotherTmpRootAddress].wallet_address);
+        }(
+            spi.tokenRoot1, tip3Wallets[spi.tokenRoot1].wallet_address,
+            spi.tokenRoot2, tip3Wallets[spi.tokenRoot2].wallet_address
+        );
     }
 
-    function getPayloadForSwap(TvmCell payload_) public {
-        if (tip3Wallets[tmpRootAddress].manageType == ManageType.MANAGE_WITH_KEYPAIR) {
+    function receivePayloadForLPWithdrawing(TvmCell payload_) public {
+        Terminal.print(0, format("Sending {} tokens to swap pair LP wallet", lpTokenAmount));
+        sendMessageToTIP3(spi.lpTokenRoot, spi.lpTokenWallet, lpTokenAmount, payload_);
+        Terminal.print(tvm.functionId(returnToMainMenu), "Liquidity withdrawing in process. Returning to main menu.");
+    }
+
+    function sendMessageToTIP3(address rootAddress, address sendTokensTo, uint128 amount, TvmCell payload_) public view {
+        if (tip3Wallets[rootAddress].manageType == ManageType.MANAGE_WITH_KEYPAIR) {
             optional(uint256) pubkey = 0;
-            ITIP3Token(tip3Wallets[tmpRootAddress].wallet_address).transfer{
+            ITIP3Token(tip3Wallets[rootAddress].wallet_address).transfer{
                 abiVer: 2,
                 extMsg: true,
                 sign: true,
@@ -193,18 +196,16 @@ contract SwapPairExplorer is Debot, Upgradable, TIP3WalletsDatabase {
                 expire: 0,
                 pubkey: pubkey
             }(
-                tmpRootAddress == spi.tokenRoot1 ? spi.tokenWallet1 : spi.tokenWallet2, 
-                amountForSwap, 0.2 ton, address.makeAddrStd(0, 0), true, payload_
+                sendTokensTo, amount, 1 ton, address.makeAddrStd(0, 0), true, payload_
             );
         } else {
             TvmCell payloadForTIP;
             payloadForTIP = tvm.encodeBody(
                 ITIP3Token.transfer, 
-                tmpRootAddress == spi.tokenRoot1 ? spi.tokenWallet1 : spi.tokenWallet2, 
-                amountForSwap, 0.2 ton, address.makeAddrStd(0, 0), true, payload_
+                sendTokensTo, amount, 0.8 ton, address.makeAddrStd(0, 0), true, payload_
             );
             optional(uint256) pubkey = 0;
-            IMultisig(tip3Wallets[tmpRootAddress].owner_address).sendTransaction{
+            IMultisig(tip3Wallets[rootAddress].owner_address).sendTransaction{
                 abiVer: 2,
                 extMsg: true,
                 sign: true,
@@ -213,10 +214,13 @@ contract SwapPairExplorer is Debot, Upgradable, TIP3WalletsDatabase {
                 time: uint64(now),
                 expire: 0,
                 pubkey: pubkey
-            }(tip3Wallets[tmpRootAddress].wallet_address, 0.2 ton, true, 1, payloadForTIP);
+            }(tip3Wallets[rootAddress].wallet_address, 1 ton, true, 1, payloadForTIP);
         }
+    }
 
-        Terminal.print(tvm.functionId(returnToMainMenu), "Swap message sent. Swap will be completed in a minute.");
+    function printAndAddToken(bytes symbol) private {
+        Terminal.print(0, format("Wallet for {} does not exists. Please add it", symbol));
+        addTIP3WalletEntryPoint(0);
     }
 
     function returnToMainMenu() public {
@@ -236,7 +240,7 @@ contract SwapPairExplorer is Debot, Upgradable, TIP3WalletsDatabase {
         Menu.select("", "", mi);
     }
 
-    function addTIP3WalletEntryPoint(uint32 index) public {        
+    function addTIP3WalletEntryPoint(uint32 index) public {
         AddressInput.get(tvm.functionId(getTIP3Address), "Input your TIP-3 wallet address:");
     }
     
