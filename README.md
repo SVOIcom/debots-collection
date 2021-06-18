@@ -19,6 +19,11 @@ Used ton-solidity compiler - [solidity compiler v0.39.0](https://github.com/brox
 
 Used tvm-linker - [latest tvm linker](https://github.com/tonlabs/TVM-linker)
 
+# IMPORTANT INFORMATION
+
+Currently Surf's debot browser fails if you try to sign a transaction using your \
+private key. Please use tonos-cli or Extraton Debot Browser to test debots.
+
 # Debots description
 
 ## SwapPairExplorer
