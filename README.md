@@ -65,3 +65,12 @@ This debot is used to perform liquidity withdrawing operations via one token.
 
 This smart contract supports TIP-3 wallets that are controlled with \
 Multisig wallet or with keypair.
+
+# Debot devnet addresses
+
+1. SwapPairExplorer: ```0:20ca87d76e89e036aa58a809f80f85af92b030bab7e106341eb1343c1dffbcfa```
+2. TonSwapDebot: ```0:9fc27ee8c29378a3a448a7ec8678c4139ea2ae474235de539537765a6e98f00e```
+3. TonLiquidityDebot: ```0:d33edbb6564bc82a2450b5f72cc33af0fee4c3a830491f4df2b278f4e1934e9a```
+4. TonLiquidityOneDebot: ```0:a98acd66dcc328e2f20c53cd25d0d8c6f0d8458ee556bf609e9b8617df4d9f07```
+5. TonLiquidityWithdrawingDebot: ```0:342054fa708cd5f63e3634999fff46177bfb9e85f9aa28eb5fbcfa9c8113a82b```
+6. TonLiquidityWithdrawingOneDebot: ```0:928c63b6a2e34b12f1bbcc2d9e8b4e275b64f99f75ea8fe3f471feae3200a9b2```
